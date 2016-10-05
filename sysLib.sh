@@ -4,8 +4,17 @@ function replaceText(){
 	textToSearch=$1
 	replaceText=$2
 	fileToReplace=$3
-	sed -i -e 's,'${textToSearch}','${replaceText}',g' ${fileToReplace}
-
+	regularExpression="([^,]+)"
+	
+	findTextInFile "$textToSearch" "$fileToReplace" "$regularExpression"
+	
+	ret=$?
+	
+	if [[ $ret != 0 ]]; then
+		echo "NOT FOUND, CHANGING"
+		sed -i -e 's,'${textToSearch}','${replaceText}',g' ${fileToReplace}
+	fi
+	
 }
 
 #Calculates a timestamp for the current time
@@ -20,5 +29,19 @@ function currentTimestamp(){
 		dateTime=`date +"%Y%m%d%H%M%S"`
 	fi
 		
+	
+}
+
+function findTextInFile(){
+
+	textToFind=$1
+	searchFile=$2
+	regularExpression=$3
+	
+	if [[ ! -z $regularExpression ]]; then
+		textFound=`grep -E -o "${textToFind}${regularExpression}" ${searchFile}`
+	else
+		textFound=`grep "${textToFind}" ${searchFile}`
+	fi
 	
 }

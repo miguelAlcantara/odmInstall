@@ -104,13 +104,29 @@ if [[ ! -z $INSTALL_DC ]]; then
 	echo "Creating Decision Center database..."
 	
 	#Execute SQL commands to create database and create the user schema
+	
+	case $db_type in 
+		DB2)	
+			paramsSQL="${db_rootPath}bin/db2 CREATE DATABASE ${decisioncenter_db_name}; ${db_rootPath}bin/db2 CONNECT TO ${decisioncenter_db_name}; ${db_rootPath}bin/db2 CREATE SCHEMA ${db_username}; ${db_rootPath}bin/db2 terminate"
+			;;
+		ORACLE)	
+			paramsSQL="sqlplus ${db_username}/${db_password} ${db_username}/${db_password} CREATE DATABASE ${decisioncenter_db_name}; sqlplus ${db_username}/${db_password} CREATE SCHEMA ${db_username}"
+			;;
+		MSSQL)	#params=MS SQL execute script
+			;;
+		DERBY)	#params=Derby execute script
+			;;
+		*)	
+			DB_TYPE_MP=
+	esac	
 	#sudo -u ${db_username} -H sh -c "${db_rootPath}bin/db2 CREATE DATABASE ${decisioncenter_db_name}; ${db_rootPath}bin/db2 CONNECT TO ${decisioncenter_db_name}; ${db_rootPath}bin/db2 CREATE SCHEMA ${db_username}; ${db_rootPath}bin/db2 terminate"
-	executeDBCommandsDB2 $db_username "${db_rootPath}bin/db2 CREATE DATABASE ${decisioncenter_db_name}; ${db_rootPath}bin/db2 CONNECT TO ${decisioncenter_db_name}; ${db_rootPath}bin/db2 CREATE SCHEMA ${db_username}; ${db_rootPath}bin/db2 terminate"
+	executeDBCommandsDB2 $db_username "${paramsSQL}"
+	
 	echo "---------------"
 	echo "Decision Center database created."
 		
 	#function replaceText to update the values in the configureDCCluster.properties file, which will be used in the next function ( configureDCCluster.sh )
-	replaceText "wodm.dcrules.db.jdbcDriverPath=" "wodm.dcrules.db.jdbcDriverPath="${db_rootPath}${db_jdbcPath} ${was_home}/profiles/${dmgr_profileName}/bin/rules/configureDCCluster.properties
+	replaceText "wodm.dcrules.db.jdbcDriverPath=" "wodm.dcrules.db.jdbcDriverPath="${db_rootPath}${db_jdbcPath} ${was_home}/profiles/${dmgr_profileName}/bin/rules/configureDCCluster.properties 
 	replaceText "wodm.dcrules.db.name=" "wodm.dcrules.db.name="${decisioncenter_db_name} ${was_home}/profiles/${dmgr_profileName}/bin/rules/configureDCCluster.properties
 	replaceText "wodm.dcrules.db.hostname=" "wodm.dcrules.db.hostname="${db_server} ${was_home}/profiles/${dmgr_profileName}/bin/rules/configureDCCluster.properties
 	replaceText "wodm.dcrules.db.port=" "wodm.dcrules.db.port="${db_port} ${was_home}/profiles/${dmgr_profileName}/bin/rules/configureDCCluster.properties
@@ -165,14 +181,19 @@ if [[ ! -z $INSTALL_DS ]]; then
 
 	#Stop the running servers to augment the DMGR to include Decision Server
 	sh $CURRENT_DIR/tools/runServers.sh -d dCenter
-	sh $CURRENT_DIR/tools/runServers.sh -d node
+	sh $CURRENT_DIR/tools/runServers.sh -d nodeagent
 	sh $CURRENT_DIR/tools/runServers.sh -d dmgr
 	
 	echo "---------------"
 	echo "Augmenting profile ${dmgr_profileName} with Decision Server..."
 
 	#function augmentProfile to augment the existing DMGR with the Decision Server
-	augmentProfile ${was_home} "${was_home}/profileTemplates/rules/management/ds" ${dmgr_profileName} ${dmgr_username} ${dmgr_password} "ODMDS" ${DB_TYPE_MP} ${db_username} ${db_password} ${db_rootPath}${db_jdbcPath} ${db_rootPath}${db_jdbcLicensePath} ${db_server} ${db_port}
+	if [[ ! -z INSTALL_DC ]]; then
+		augmentProfile ${was_home} "${was_home}/profileTemplates/rules/management/ds" ${dmgr_profileName} ${dmgr_username} ${dmgr_password} "ODMDS" ${DB_TYPE_MP} ${db_username} ${db_password} ${db_rootPath}${db_jdbcPath} ${db_rootPath}${db_jdbcLicensePath} ${db_server} ${db_port}
+	else 
+		augmentProfile ${was_home} "${was_home}/profileTemplates/rules/management/ds" ${dmgr_profileName} ${dmgr_username} ${dmgr_password} "ODMDS" ${DB_TYPE_MP} ${db_username} ${db_password} ${db_rootPath}${db_jdbcPath} ${db_rootPath}${db_jdbcLicensePath} ${db_server} ${db_port}
+	fi
+	
 	
 	echo "---------------"
 	echo "Profile ${dmgr_profileName} augmented with Decision Server template."
@@ -182,7 +203,20 @@ if [[ ! -z $INSTALL_DS ]]; then
 	
 	#Execute SQL commands to create the database, the user schema, BUFFERPOOL ( for DB2 only ) and create the tables and populate them.
 	#sudo -u $db_username -H sh -c "${db_rootPath}bin/db2 CREATE DATABASE ${decisionserver_db_name}; ${db_rootPath}bin/db2 CONNECT TO ${decisionserver_db_name}; CREATE BUFFERPOOL BP32K SIZE 2000 PAGESIZE 32K; ${db_rootPath}bin/db2 CREATE SCHEMA ${db_username}; ${db_rootPath}bin/db2 -tvsf ${odm_home}/executionserver/databases/repository_db2.sql; ${db_rootPath}bin/db2 -tvsf ${odm_home}/executionserver/databases/trace_db2.sql; ${db_rootPath}bin/db2 -tvsf ${odm_home}/executionserver/databases/xomrepository_db2.sql; ${db_rootPath}bin/db2 terminate"
-	executeDBCommandsDB2 $db_username "${db_rootPath}bin/db2 CREATE DATABASE ${decisionserver_db_name}; ${db_rootPath}bin/db2 CONNECT TO ${decisionserver_db_name}; CREATE BUFFERPOOL BP32K SIZE 2000 PAGESIZE 32K; ${db_rootPath}bin/db2 CREATE SCHEMA ${db_username}; ${db_rootPath}bin/db2 -tvsf ${odm_home}/executionserver/databases/repository_db2.sql; ${db_rootPath}bin/db2 -tvsf ${odm_home}/executionserver/databases/trace_db2.sql; ${db_rootPath}bin/db2 -tvsf ${odm_home}/executionserver/databases/xomrepository_db2.sql; ${db_rootPath}bin/db2 terminate"
+
+	case $db_type in 
+		DB2)	params="${db_rootPath}bin/db2 CREATE DATABASE ${decisionserver_db_name}; ${db_rootPath}bin/db2 CONNECT TO ${decisionserver_db_name}; CREATE BUFFERPOOL BP32K SIZE 2000 PAGESIZE 32K; ${db_rootPath}bin/db2 CREATE SCHEMA ${db_username}; ${db_rootPath}bin/db2 -tvsf ${odm_home}/executionserver/databases/repository_db2.sql; ${db_rootPath}bin/db2 -tvsf ${odm_home}/executionserver/databases/trace_db2.sql; ${db_rootPath}bin/db2 -tvsf ${odm_home}/executionserver/databases/xomrepository_db2.sql; ${db_rootPath}bin/db2 terminate"
+				;;
+		ORACLE)	params="sqlplus ${db_username}/${db_password} ${db_username}/${db_password} CREATE DATABASE ${decisionserver_db_name}; sqlplus ${db_username}/${db_password} CREATE SCHEMA ${db_username}; sqlplus ${db_username}/${db_password} START ${odm_home}/executionserver/databases/repository_oracle.sql; sqlplus ${db_username}/${db_password} START ${odm_home}/executionserver/databases/trace_oracle.sql; sqlplus ${db_username}/${db_password} START ${odm_home}/executionserver/databases/xomrepository_oracle.sql"
+				;;
+		MSSQL)	#params=MS SQL execute script
+				;;
+		DERBY)	#params=Derby execute script
+				;;
+		*)		DB_TYPE_MP=
+	esac			
+	
+	executeDBCommandsDB2 $db_username $params
 	
 	echo "---------------"
 	echo "Decision Server database created."
@@ -204,7 +238,7 @@ if [[ ! -z $INSTALL_DS ]]; then
 	
 	#Starting the servers in order to execute the configureDSCluster.sh script, to configure all the components needed to use the Decision Server
 	sh $CURRENT_DIR/tools/runServers.sh -u dCenter
-	sh $CURRENT_DIR/tools/runServers.sh -u node
+	sh $CURRENT_DIR/tools/runServers.sh -u nodeagent
 	sh $CURRENT_DIR/tools/runServers.sh -u dmgr
 	
 	echo "---------------"
@@ -278,11 +312,27 @@ if [[ ! -z $INSTALL_WBE ]]; then
 	echo "Creating Decision Events database..."
 	
 	#Backup the DB2 sql file
-	cp ${odm_home}/config/db/db2.sql $CURRENT_DIR/db2.sql
+	
 	
 	#Execute SQL commands to create the database, the user schema and create the tables and populate them.
+	
+	case $db_type in 
+		DB2)	params="${db_rootPath}bin/db2 CREATE DATABASE ${decisionevents_db_name}; ${db_rootPath}bin/db2 CONNECT TO ${decisionevents_db_name}; ${db_rootPath}bin/db2 CREATE SCHEMA ${db_username}; ${db_rootPath}bin/db2 -tvsf ${CURRENT_DIR}/db2.sql; ${db_rootPath}bin/db2 terminate"
+				cp ${odm_home}/config/db/db2.sql $CURRENT_DIR/db2.sql
+				;;
+		ORACLE)	params="sqlplus ${db_username}/${db_password} ${db_username}/${db_password} CREATE DATABASE ${decisioncenter_db_name}; sqlplus ${db_username}/${db_password} CREATE SCHEMA ${db_username}"
+				cp ${odm_home}/config/db/ora.sql $CURRENT_DIR/ora.sql
+				;;
+		MSSQL)	#params=MS SQL execute script
+				cp ${odm_home}/config/db/mssql2k.sql $CURRENT_DIR/mssql2k.sql
+				;;
+		DERBY)	#params=Derby execute script
+				cp ${odm_home}/config/db/derbydb.sql $CURRENT_DIR/derbydb.sql
+				;;
+		*)		DB_TYPE_MP=
+	esac
 	#sudo -u ${db_username} -H sh -c "${db_rootPath}bin/db2 CREATE DATABASE ${decisionevents_db_name}; ${db_rootPath}bin/db2 CONNECT TO ${decisionevents_db_name}; ${db_rootPath}bin/db2 CREATE SCHEMA ${db_username}; ${db_rootPath}bin/db2 -tvsf ${CURRENT_DIR}/db2.sql; ${db_rootPath}bin/db2 terminate"
-    executeDBCommandsDB2 $db_username "${db_rootPath}bin/db2 CREATE DATABASE ${decisionevents_db_name}; ${db_rootPath}bin/db2 CONNECT TO ${decisionevents_db_name}; ${db_rootPath}bin/db2 CREATE SCHEMA ${db_username}; ${db_rootPath}bin/db2 -tvsf ${CURRENT_DIR}/db2.sql; ${db_rootPath}bin/db2 terminate"
+    executeDBCommandsDB2 $db_username $params
 	
 	echo "---------------"
 	echo "Decision Events database created."
